@@ -1,0 +1,240 @@
+---
+title: "Xi'an Weather Multiple Linear Regression"
+author: "Chi Ting Low"
+date: "7/14/2018"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+---
+# Introduction
+
+
+In recent year, cities in China have encouter the problem of smug or fog. This increase the city's pollution and many concern about the influence of the smug or fog. The case study shown here is one of the city in China Xi'an. Due to it's location, Xi'an has a temperate climate that is influenced by the East Asian monsoon with less wind and rain. Xi'an also a city with heavy industry complex and it is less environmental friendly. The aims of the current study is to understand what influence the air quality. This project is also aimed to study which factor contribute to air quality index.  
+
+
+```{r, warning=FALSE, message=FALSE}
+#loading packaged
+library(readxl)
+library(dplyr)
+library(tidyverse)
+
+source("https://raw.githubusercontent.com/iascchen/VisHealth/master/R/calendarHeat.R")
+
+#read data
+weather_xian <- read_xlsx("2016-2017年西安天气.xlsx", na = "NA")
+
+#checking missing values
+anyNA(weather_xian)
+```
+
+# Date Preprocessing
+
+Prior the analysis, we have to recode the variable name into correct values. Due to some unique character that is not identifiable by R. Therefore, these Chinese chracter is recode into english. In addition, we also remove special character in the temperature. Once the processes are completed, the data is tranform into correct data type.
+
+
+```{r}
+#rename column
+colnames(weather_xian) <- c('Date', "Days","Higest_temperature", 
+                            "Lowest_temperature", "Weather",
+                            "Wind_direction", "Wind_speed",
+                            "Air_quality_index", "Air_quality")
+
+#remove character in highest and lowest temperature
+weather_xian$Higest_temperature = unlist(strsplit(weather_xian$Higest_temperature,
+                                                  split = "℃", fixed = TRUE))
+weather_xian$Lowest_temperature = unlist(strsplit(weather_xian$Lowest_temperature, 
+                                                  split = "℃", fixed = TRUE))
+
+#recoding data
+weather_xian$Days <- recode(weather_xian$Days, "星期日" = "Sunday", 
+                            "星期一" = "Monday", "星期二" = "Tuesday", 
+                            "星期三" = "Wednesday", "星期四" = "Thursday",
+                            "星期五" = 'Friday', "星期六" = "Saturday" )
+
+weather_xian$Wind_speed <- recode(weather_xian$Wind_speed, '0' = 'Calm',
+                                  '1-2级' = 'Light Breeze', 
+                                  '3-4级' = 'Moderate Wind',
+                                  '4-5级' = 'Strong Wind')
+
+weather_xian$Wind_direction <- recode(weather_xian$Wind_direction, '东' = 'East', 
+                                      '东北' = 'North East', 
+                                      '东南' = "South East", '北' = 'North',
+                                      '南' = 'South', '无持续' = 'Unpredicted', 
+                                      '西' = 'West', '西北' = 'North West', 
+                                      '西南' = 'South West')
+
+weather_xian$Air_quality <- recode(weather_xian$Air_quality,
+                                   '严重污染' = 'Serious pollution', 
+                                   '中度污染' = 'Moderately pollution',
+                                   '优' = 'Excellent', '良' = 'Good',
+                                   '轻度污染' = 'Mild pollution', 
+                                   '重度污染' = 'Severe pollution')
+
+weather_xian$Weather <- recode(weather_xian$Weather, '中到大雨~多云' = 'raining', 
+                               '中雨' = 'raining', '中雨~多云' = 'raining', 
+                               '中雨~大雨' = 'raining', '中雨~小雨' = 'raining', 
+                               '中雨~晴' = 'raining', '中雨~阴' = 'raining', 
+                               '多云' = 'cloudy', '多云~小到中雨' = 'cloudy', 
+                               '多云~小雨' = 'cloudy', '多云~晴' = 'cloudy', 
+                               '多云~阴' = 'cloudy', '多云~阵雨' = 'cloudy', 
+                               '多云~雨夹雪' = 'cloudy', '大雨~中雨' = 'raining', 
+                               '大雨~多云' = 'raining', '大雨~小雨' = 'raining',
+                               '小到中雨~多云' = 'raining', '小到中雨~小雨' = 'raining',
+                               '小到中雨~阴' = 'raining', '小雨' = 'raining', 
+                               '小雨~中雨' = 'raining', '小雨~多云' = 'raining', 
+                               '小雨~小到中雨' = 'raining', '小雨~晴' = 'raining', 
+                               '小雨~阴' = 'raining', '小雪~多云' = 'snowing', 
+                               '小雪~阴' = 'snowing', '晴' = 'sunny', 
+                               '晴~多云' = 'sunny', '晴~小雨' = 'sunny', 
+                               '晴~阴' = 'sunny', '暴雨~大雨' = 'raining', 
+                               '阴' = 'cloudy', '阴~中雨' = 'cloudy', 
+                               '阴~多云' = 'cloudy', '阴~大雨' = 'cloudy',
+                               '阴~小到中雨' = 'cloudy', '阴~小雨' = 'cloudy',
+                               '阴~小雪' = 'cloudy', '阴~晴' = 'cloudy', 
+                               '阴~阵雨' = 'cloudy', '阴~雨夹雪' = 'cloudy',
+                               '阵雨' = 'raining', '阵雨~多云' = 'raining', 
+                               '阵雨~小雨' = 'raining', '阵雨~阴' = 'raining', 
+                               '雨夹雪' = 'raining', '雷阵雨~阴' = 'raining', 
+                               '雷阵雨~阵雨' = 'raining', '霾' = 'fog', 
+                               '霾~多云' = 'fog', '霾~晴' = 'fog', '霾~阴' = 'fog' )
+
+#convert into right data type
+weather_xian$Days <- as.factor(weather_xian$Days)
+weather_xian$Higest_temperature <- as.numeric(weather_xian$Higest_temperature)
+weather_xian$Lowest_temperature <- as.numeric(weather_xian$Lowest_temperature)
+weather_xian$Air_quality_index <- as.numeric(weather_xian$Air_quality_index)
+weather_xian$Weather <- as.factor(weather_xian$Weather)
+weather_xian$Wind_direction <- as.factor(weather_xian$Wind_direction)
+weather_xian$Wind_speed <- as.factor(weather_xian$Wind_speed)
+weather_xian$Air_quality <- as.factor(weather_xian$Air_quality)
+
+str(weather_xian)
+```
+
+# Date exploration
+
+Below are the plot of the highest and lowest temperature recored on the day in 2016 and 2017. It shows that the highest temperature are recorded from Apri to August. However, for the highest air quality index are occurded during December to next year January. 
+
+
+```{r}
+weather_2016 = weather_xian[weather_xian$Date < "2017-01-01",]
+weather_2016$Date <- as.Date(weather_2016$Date)
+
+weather_2016 %>% 
+  ggplot() +
+  geom_line(aes(x = Date, 
+                y = Higest_temperature,
+                colour = 'blue')) +
+  geom_line(aes(x = Date, 
+                y = Lowest_temperature,
+                colour = 'red')) +
+  labs(title = "Higest and Lowest Temperature Recorded in 2016, Xi'an", 
+       x = "Date",
+       y = 'Temperature',
+       color = "Temperature" ) +
+  scale_color_manual(labels = c("Highest", "Lowest"),
+                     values = c("red", "blue")) 
+```
+
+```{r}
+weather_2017 = weather_xian[weather_xian$Date >= "2017-01-01",]
+weather_2017$Date <- as.Date(weather_2017$Date)
+
+weather_2017 %>% 
+  ggplot() +
+  geom_line(aes(x = Date,
+                y = Higest_temperature,
+                colour = 'blue')) +
+  geom_line(aes(x = Date, 
+                y = Lowest_temperature, 
+                colour = 'red')) +
+  labs(title = "Higest and Lowest Temperature Recorded in 2017, Xi'an",
+       color = "Temperature" ) +
+  scale_color_manual(labels = c("Highest", "Lowest"), 
+                     values = c("red", "blue")) 
+```
+```{r, message=FALSE, warning=FALSE}
+
+calendarHeat(dates = weather_xian$Date, values = weather_xian$Higest_temperature, color = 'g2r', varname = "2016-2017 Highest Temperature")
+
+```
+
+```{r}
+calendarHeat(dates = weather_xian$Date, values = weather_xian$Lowest_temperature, color = 'g2r', varname = "2016-2017 Lowest Temperature")
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+calendarHeat(dates = weather_xian$Date, values = weather_xian$Air_quality_index, varname = '2016-2017 Air Quality Index')
+```
+
+Below are the boxplot of the temperature from 2016 to 2017.
+
+```{r}
+weather_2016$Days <- factor(weather_2016$Days, levels = c("Sunday", "Monday","Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+weather_2016[order(weather_2016$Days), ]
+
+weather_2016 %>%
+  ggplot() +
+  geom_boxplot(aes(x = Days, y = Higest_temperature))
+```
+
+```{r}
+weather_2016 %>%
+  ggplot() +
+  geom_boxplot(aes(x = Days, y = Lowest_temperature))
+```
+
+```{r}
+
+weather_2017$Days <- factor(weather_2017$Days, levels = c("Sunday", "Monday","Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+weather_2017[order(weather_2017$Days), ]
+
+weather_2017 %>%
+  ggplot() +
+  geom_boxplot(aes(x = Days, y = Higest_temperature))
+```
+
+```{r}
+weather_2017 %>%
+  ggplot() +
+  geom_boxplot(aes(x = Days, y = Lowest_temperature))
+```
+
+As shown in the density plot, it shows that the temperature are not normally distributed. Additionally, there is a heavy skew in the air quality index.
+
+
+```{r}
+weather_xian %>%
+  ggplot() +
+  geom_density(aes(Higest_temperature, fill = 'red')) +
+  theme(legend.position="none")
+```
+```{r}
+weather_xian %>%
+  ggplot() +
+  geom_density(aes(Lowest_temperature, fill = 'red')) + 
+  theme(legend.position="none")
+```
+
+```{r}
+weather_xian %>%
+  ggplot() +
+  geom_density(aes(Air_quality_index, fill = 'red')) +
+  theme(legend.position="none")
+```
+
+# Data Analysis
+
+To predict the air quality index, we are using highest temperature, lowest temperature, weather of the day, wind direction and wind speed to analyze. It shows that the lowest temperature, foggy weather and raining day may contribute to the air quality index. 
+
+```{r}
+attach(weather_xian)
+names(weather_xian)
+model <- lm(Air_quality_index ~ Higest_temperature + Lowest_temperature + Weather + Wind_direction + Wind_speed)
+summary(model)
+```
+
+
+# Reference
+Dataset https://mp.weixin.qq.com/s?__biz=MzA5MjEyMTYwMg==&mid=2650241195&idx=1&sn=ccfddc373857dc7b5a8a94b7847b7ba1&chksm=887227c6bf05aed0f8af502356a811f216ec04284edb96385eb299716d77a65bf98a109198ff&scene=21#wechat_redirect
